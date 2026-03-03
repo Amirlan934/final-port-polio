@@ -26,8 +26,9 @@ export function SparkleParticles() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animationFrameRef = useRef<number>();
+  const scrollYRef = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
     // Check for reduced motion preference
@@ -42,16 +43,26 @@ export function SparkleParticles() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  // Track scroll position for parallax
+  // Track scroll without triggering React re-renders
   useEffect(() => {
     if (prefersReducedMotion) return;
 
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      if (scrollRafRef.current !== null) return;
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollYRef.current = window.scrollY;
+        scrollRafRef.current = null;
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
   }, [prefersReducedMotion]);
 
   useEffect(() => {
@@ -71,8 +82,9 @@ export function SparkleParticles() {
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // Initialize particles
-    const particleCount = Math.floor((canvas.width * canvas.height) / 15000); // Density based on screen size
+    // Initialize particles (slightly lower density on smaller screens)
+    const densityDivisor = canvas.width < 768 ? 26000 : 18000;
+    const particleCount = Math.floor((canvas.width * canvas.height) / densityDivisor);
     particlesRef.current = [];
 
     for (let i = 0; i < particleCount; i++) {
@@ -88,7 +100,7 @@ export function SparkleParticles() {
         particle.baseY += particle.speedY;
 
         // Apply parallax based on scroll ON TOP of ambient movement
-        const parallaxOffset = scrollY * particle.parallaxFactor;
+        const parallaxOffset = scrollYRef.current * particle.parallaxFactor;
         particle.y = particle.baseY + parallaxOffset;
 
         // Reset particle when it goes off screen (for continuous flow)
@@ -153,7 +165,7 @@ export function SparkleParticles() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [prefersReducedMotion, scrollY]);
+  }, [prefersReducedMotion]);
 
   if (prefersReducedMotion) return null;
 

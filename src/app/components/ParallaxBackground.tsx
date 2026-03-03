@@ -24,12 +24,22 @@ export function ParallaxBackground({ imageUrl }: ParallaxBackgroundProps) {
   useEffect(() => {
     if (prefersReducedMotion) return;
 
+    let rafId: number | null = null;
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        setScrollY(window.scrollY);
+        rafId = null;
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
   }, [prefersReducedMotion]);
 
   // Parallax calculation: 30% of scroll speed (increased for more noticeable effect)
